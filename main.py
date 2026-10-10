@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 import model
 from database import engine
+from sqlalchemy import text
+from fastapi.middleware.cors import CORSMiddleware
 
 model.Base.metadata.create_all(bind=engine)
 def get_db():
@@ -15,7 +17,15 @@ def get_db():
 
 app = FastAPI()
 
-from sqlalchemy import text
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173"
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
+)
 
 @app.get("/ping")
 def ping():
