@@ -15,12 +15,14 @@ def get_db():
 
 app = FastAPI()
 
+from sqlalchemy import text
+
 @app.get("/ping")
 def ping():
     db = SessionLocal()
     try:
-        db.execute(text("SELECT 1"))
-        return {"status": "ok"}
+        count = db.execute(text("SELECT COUNT(*) FROM certificate")).scalar()
+        return {"status": "ok", "certificates": count}
     finally:
         db.close()
 
