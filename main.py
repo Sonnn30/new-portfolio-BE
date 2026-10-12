@@ -51,6 +51,7 @@ def get_project_desc(project_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Project not found")
     
     return {
+        "id": project.id,
         "title": project.title,
         "desc": project.desc,
         "github": project.github,
@@ -65,6 +66,7 @@ def get_certificate_list(db: Session = Depends(get_db)):
 
     return [
         {
+            "id": c.id,
             "title": c.title,
             "by": c.by,
             "link": c.links,
@@ -80,6 +82,7 @@ def skill_list(db: Session = Depends(get_db)):
 
     return [
         {
+            "id": s.id,
             "title": s.title,
             "category": s.category,
             "level": s.level,
@@ -95,6 +98,7 @@ def get_skill(skill_id: int, db: Session = Depends(get_db)):
     skill = db.query(model.Skill).filter(model.Skill.id == skill_id).first()
 
     return {
+        "id": skill.id,
         "title": skill.title,
         "category": skill.category,
         "level": skill.level,
