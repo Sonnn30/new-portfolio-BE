@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException
 from database import SessionLocal
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, func
 import model
 from database import engine
 from sqlalchemy import text
@@ -107,4 +107,18 @@ def get_skill(skill_id: int, db: Session = Depends(get_db)):
         "link": skill.link,
         "learning_difficulity": skill.learning_difficulity,
         "img": skill.img_url[0].img_url
+    }
+
+
+@app.get("/list-list")
+def getlist_info(db: Session = Depends(get_db)):
+    year = 1
+    project = db.query(func.max(model.ProjectList.id)).scalar()
+    certif = db.query(func.max(model.Certificate.id)).scalar()
+
+    return {
+        "year": year,
+        "project": project,
+        "certificate": certif
+
     }
