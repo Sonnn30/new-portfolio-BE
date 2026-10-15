@@ -6,6 +6,12 @@ import model
 from database import engine
 from sqlalchemy import text
 from fastapi.middleware.cors import CORSMiddleware
+import resend
+from pydantic import BaseModel, EmailStr
+import asyncio
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
 model.Base.metadata.create_all(bind=engine)
 def get_db():
@@ -127,3 +133,28 @@ def getlist_info(db: Session = Depends(get_db)):
         "certificate": certif
 
     }
+
+
+resend.api_key = os.getenv("RESEND_API_KEY")
+MAIL_FROM = os.getenv("MAIL_FROM", "onboarding@resend.dev")
+
+
+class EmailRequest(BaseModel):
+    to: list[EmailStr]
+    subject: str
+    html: str
+
+
+@app.post("/send-email")
+async def send_email(payload: EmailRequest):
+    params: resend.Emails.SendParams = {
+        "from": MAIL_FROM,
+        "to": payload.to,
+        "subject": payload.subject,
+        "html": payload.html,
+    }
+    try:
+        result = await asyncio.to_thread(resend.Emails.send, params)
+        return {"status": "success", "id": result["id"]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
