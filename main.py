@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException
 from database import SessionLocal
 from sqlalchemy.orm import Session
-from sqlalchemy import text, func
+from sqlalchemy import text, func, select
 import model
 from database import engine
 from sqlalchemy import text
@@ -49,6 +49,10 @@ def get_project_desc(project_id: int, db: Session = Depends(get_db)):
     project = db.query(model.Project).filter(model.Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=400, detail="Project not found")
+
+    count = select(func.count(model.Tech.project_id)).where(model.Tech.project_id == project_id)
+    all_c = db.scalar(count)
+
     
     return {
         "id": project.id,
@@ -57,7 +61,8 @@ def get_project_desc(project_id: int, db: Session = Depends(get_db)):
         "github": project.github,
         "key_feature": project.key_feature,
         "tech_used": [t.tech for t in project.tech],
-        "img": [i.img_url for i in project.img]
+        "img": [i.img_url for i in project.img],
+        "total_tech": all_c
     }
 
 @app.get("/certificate-list")
