@@ -1,6 +1,7 @@
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy.dialects.postgresql import ARRAY
+from pgvector.sqlalchemy import Vector
 
 Base = declarative_base()
 
@@ -71,3 +72,24 @@ class Skill(Base):
     img_url = relationship("Image", back_populates="skill", cascade="all, delete-orphan")
 
 
+class Chat(Base):
+    __tablename__ = "chat"
+    id = Column(Integer, primary_key=True, index=True)
+    role = Column(String)
+    message = Column(String)
+    session_id = Column(String, index=True)
+
+
+class EmbedingChat(Base):
+    __tablename__ = "embeding_chat"
+    id = Column(Integer, primary_key=True, index=True)
+    message = Column(String)
+    embeded_message = Column(Vector(384))
+    session_id = Column(String, index=True)
+
+
+class DataKonteks(Base):
+    __tablename__ = "data_konteks"
+    id = Column(Integer, primary_key=True, index=True)
+    chunk = Column(String)
+    embeded_chunk = Column(Vector(384))

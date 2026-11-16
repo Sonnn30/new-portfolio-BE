@@ -1,15 +1,22 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from database import SessionLocal
 from sqlalchemy.orm import Session
-from sqlalchemy import text, func, select
+from langchain_text_splitters import RecursiveCharacterTextSplitter 
 import model
 from database import engine
 from sqlalchemy import text
 from fastapi.middleware.cors import CORSMiddleware
 import resend
+from sentence_transformers import SentenceTransformer
+from service.cosine_similarity import similarity
 from pydantic import BaseModel, EmailStr
+from schema import ChatUser
 import asyncio
 import os
+import uuid
+from groq import Groq
+from pypdf import PdfReader
+import io
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -22,6 +29,7 @@ def get_db():
         db.close()
 
 app = FastAPI()
+embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
 app.add_middleware(
     CORSMiddleware,
@@ -158,3 +166,130 @@ async def send_email(payload: EmailRequest):
         return {"status": "success", "id": result["id"]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/chunking")
+async def chunking(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    if not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(status_code= 400, detail="please upload pdf file")
+
+    try:
+
+        isi_file = await file.read()
+
+        pdf_stream = io.BytesIO(isi_file)
+        reader = PdfReader(pdf_stream)
+
+        teks_full = "".join([
+            halaman.extract_text()
+            for halaman in reader.pages
+            if halaman.extract_text() is not None
+        ])
+
+        # total_kata = len(teks_full.split())
+        chunking = RecursiveCharacterTextSplitter(
+            chunk_size = 1000,
+            chunk_overlap = 100,
+            separators=["\n\n", "\n", " ", ""],
+            length_function = len
+
+        )
+        hasil_chunk = chunking.split_text(teks_full)
+
+        for chunk in hasil_chunk:
+            vektor_embedding = embedding_model.encode(chunk).tolist()
+            db_chunk = model.DataKonteks(chunk = chunk, embeded_chunk = vektor_embedding)
+            db.add(db_chunk)
+
+        db.commit()
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gagal memproses PDF: {str(e)}")
+
+
+    return "berhasil upload dan chunking file"
+
+
+client = Groq(
+    api_key=os.environ.get("GROQ_API_KEY") 
+)
+MODEL_NAME = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+
+def ask_llm(question: str, context: str) -> str:
+    completion = client.chat.completions.create(
+        model=MODEL_NAME,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are an assistant that answers questions about Wilson Prajnawira.\n"
+                    "Rules:\n"
+                    "1. Answer ONLY using the CONTEXT below.\n"
+                    "2. If the answer is not in the CONTEXT, say you don't know.\n"
+                    "3. Reply in the SAME language as the user's question. "
+                    "If the question is in English, reply in English. "
+                    "If the question is in Indonesian, reply in Indonesian. "
+                    "Never choose the language based on the CONTEXT or on the person's name or country.\n\n"
+                    f"CONTEXT:\n{context}\n\n"
+                    "Reminder: reply in the language of the user's question."
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"{question}\n\n(Reply in the same language as the question above.)",
+            },
+        ],
+        temperature=0.2,
+    )
+    return completion.choices[0].message.content
+
+@app.post("/input-chat")
+def input_chat(data: ChatUser, db: Session = Depends(get_db), service: similarity = Depends()):
+    try:
+        uuid.UUID(data.session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="invalid session_id")
+    data.role = "user"
+
+    chat = model.Chat(role=data.role, message=data.message, session_id=data.session_id)
+    embed_message = embedding_model.encode(data.message).tolist()
+    embed_mss = model.EmbedingChat(
+        message=data.message, embeded_message=embed_message, session_id=data.session_id
+    )
+
+    db.add_all([chat, embed_mss])
+    db.commit()
+
+    top_5 = []
+    if data.role == "user":
+        docs_data = db.query(model.DataKonteks).all()
+        top_5 = service.cosine_similarity(embed_message, docs_data, top_k=5)
+
+
+    scores = []
+    for row, score in top_5:
+        scores.append(score)
+
+    scores.sort(reverse=True)
+
+    respons = True
+
+    if scores[0] < 0.16:
+        respons = False
+
+    answer = "Sorry, I couldn't find that information in the document."
+
+    if respons:
+        context = "\n\n---\n\n".join(row.chunk for row, _ in top_5)
+        answer = ask_llm(data.message, context)
+
+    db.add(model.Chat(role="bot", message=answer, session_id=data.session_id))
+    db.commit()
+    
+
+    return {
+        "status": "berhasil input chat",
+        "message": data.message,
+        "answer": answer,
+        "results": [{"chunk": row.chunk, "score": score} for row, score in top_5]
+    }
