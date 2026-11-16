@@ -1,8 +1,18 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+
 fastapi
 uvicorn
 sqlalchemy
 psycopg[binary]
 psycopg2-binary
+pgvector
 python-dotenv
-resend
+python-multipart
 email-validator
+resend
+groq
+pypdf
+numpy
+langchain-text-splitters
+sentence-transformers
