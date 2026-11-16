@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from langchain_text_splitters import RecursiveCharacterTextSplitter 
 import model
 from database import engine
-from sqlalchemy import text
+from sqlalchemy import text, select, func
 from fastapi.middleware.cors import CORSMiddleware
 import resend
 from sentence_transformers import SentenceTransformer
