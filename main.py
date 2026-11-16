@@ -277,7 +277,7 @@ def input_chat(data: ChatUser, db: Session = Depends(get_db), service: similarit
     if scores[0] < 0.16:
         respons = False
 
-    answer = "Sorry, I couldn't find that information in the document."
+    answer = "Sorry, I couldn't find that information"
 
     if respons:
         context = "\n\n---\n\n".join(row.chunk for row, _ in top_5)
@@ -293,3 +293,12 @@ def input_chat(data: ChatUser, db: Session = Depends(get_db), service: similarit
         "answer": answer,
         "results": [{"chunk": row.chunk, "score": score} for row, score in top_5]
     }
+
+
+@app.get("/get-chat/{id}")
+def get_chat(id: uuid.UUID, db: Session = Depends(get_db)):
+    chat = db.query(model.Chat).filter(model.Chat.session_id == str(id)).order_by(model.Chat.id).all()
+    if not chat:
+        raise HTTPException(status_code=400, detail="No id found")
+
+    return [{"role": c.role, "message": c.message} for c in chat]
